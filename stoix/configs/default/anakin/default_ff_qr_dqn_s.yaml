@@ -1,0 +1,11 @@
+defaults:
+  - logger: base_logger
+  - arch: anakin
+  - system: q_learning/ff_qr_dqn_s
+  - network: mlp_qr_dqn_s
+  - env: gymnax/stockgridworld
+  - _self_
+
+hydra:
+  searchpath:
+    - file://stoix/configs

@@ -9,8 +9,8 @@ import jax.numpy as jnp
 import numpy as np
 from flax import linen as nn
 
-from stoix.base_types import Observation, RNNObservation
-from stoix.networks.inputs import ObservationInput
+from stoix.base_types import Observation, RNNObservation, StockObservation
+from stoix.networks.inputs import ObservationInput, StockObservationInput
 from stoix.networks.utils import parse_rnn_cell
 
 
@@ -46,6 +46,22 @@ class FeedForwardCritic(nn.Module):
         critic_output = self.critic_head(obs_embedding)
 
         return critic_output
+
+
+class StockFeedForwardActor(nn.Module):
+    """Simple Feedforward Actor Network with Stock"""
+
+    action_head: nn.Module
+    torso: nn.Module
+    input_layer: nn.Module = StockObservationInput()
+
+    @nn.compact
+    def __call__(self, observation: StockObservation) -> distrax.DistributionLike:
+        obs_embedding = self.input_layer(observation)
+
+        obs_embedding = self.torso(obs_embedding)
+
+        return self.action_head(obs_embedding, observation.stock)
 
 
 class CompositeNetwork(nn.Module):

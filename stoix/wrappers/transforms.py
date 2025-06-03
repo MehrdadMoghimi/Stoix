@@ -10,7 +10,8 @@ from jumanji.specs import Array, Spec
 from jumanji.types import TimeStep
 from jumanji.wrappers import Wrapper
 
-from stoix.base_types import Observation
+from stoix.base_types import Observation, StockObservation, StockEnvState
+from stoix.wrappers.gymnax import gymnax_space_to_jumanji_spec
 
 
 class FlattenObservationWrapper(Wrapper):
@@ -222,4 +223,100 @@ class MakeChannelLast(Wrapper):
     def observation_spec(self) -> Spec:
         return self._env.observation_spec().replace(
             agent_view=Array(shape=self._obs_shape, dtype=jnp.float32)
+        )
+
+
+class AddStock(Wrapper):
+    """Wrapper that adds a stock."""
+
+    def __init__(
+        self,
+        env: Environment,
+        gamma: float,
+        initial_stock: float = None,
+        initial_stock_min: float = None,
+        initial_stock_max: float = None,
+    ):
+        super().__init__(env)
+        self._env = env
+        self._gamma = gamma
+        self._initial_stock = initial_stock
+        self._initial_stock_min = initial_stock_min
+        self._initial_stock_max = initial_stock_max
+
+        # Get the action dimension
+        if isinstance(self._env.action_spec(), specs.DiscreteArray):
+            self.action_dim = self._env.action_spec().num_values
+            self.discrete = True
+        else:
+            self.action_dim = self._env.action_spec().shape[0]
+            self.discrete = False
+
+        # check if whether initial_stock is not None or initial_stock_min and initial_stock_max are not None
+        if initial_stock is None and (initial_stock_min is None or initial_stock_max is None):
+            raise ValueError(
+                "Either initial_stock or initial_stock_min and initial_stock_max must be provided."
+            )
+
+    def reset(self, key: chex.PRNGKey) -> Tuple[StockEnvState, TimeStep[StockObservation]]:
+
+        key_env_reset, key_stock_init = jax.random.split(key)
+
+        env_state, timestep = self._env.reset(key_env_reset)
+
+        # If initial_stock is provided, use it; otherwise, generate a random initial stock
+        if self._initial_stock is not None:
+            initial_stock = jnp.array(self._initial_stock, dtype=jnp.float32)
+        else:
+            initial_stock = jax.random.uniform(
+                key_stock_init,
+                minval=self._initial_stock_min,
+                maxval=self._initial_stock_max,
+                dtype=jnp.float32,
+                shape=(),
+            )
+
+        state = StockEnvState(key=key, env_state=env_state, stock=initial_stock)
+
+        timestep = timestep.replace(
+            observation=StockObservation(
+                agent_view=timestep.observation.agent_view,
+                action_mask=timestep.observation.action_mask,
+                step_count=jnp.array(0, dtype=int),
+                stock=initial_stock,
+            )
+        )
+        return state, timestep
+
+    def step(
+        self, state: State, action: chex.Array
+    ) -> Tuple[StockEnvState, TimeStep[StockObservation]]:
+        env_state, timestep = self._env.step(state.env_state, action)
+        new_stock = (state.stock + timestep.reward) / self._gamma
+
+        state = StockEnvState(key=state.key, env_state=env_state, stock=new_stock)
+        timestep = timestep.replace(
+            observation=StockObservation(
+                agent_view=timestep.observation.agent_view,
+                action_mask=timestep.observation.action_mask,
+                step_count=jnp.array(0, dtype=int),
+                stock=new_stock,
+            )
+        )
+        return state, timestep
+
+    def observation_spec(self) -> Spec:
+        agent_view_spec = gymnax_space_to_jumanji_spec(
+            self._env.observation_space(self._env_params)
+        )
+
+        action_mask_spec = Array(shape=self._legal_action_mask.shape, dtype=float)
+
+        return specs.Spec(
+            StockObservation,
+            "StockObservationSpec",
+            agent_view=agent_view_spec,
+            action_mask=action_mask_spec,
+            stock=Array(shape=(), dtype=float),
+            step_count=Array(shape=(), dtype=int),
         )

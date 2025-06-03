@@ -94,7 +94,9 @@ def get_ff_evaluator_fn(
         def _env_step(eval_state: EvalState) -> EvalState:
             """Step the environment."""
             # PRNG keys.
-            key, env_state, last_timestep, step_count, episode_return = eval_state
+            key, env_state, last_timestep, step_count, episode_return, episode_discounted_return = (
+                eval_state
+            )
 
             # Select action.
             key, policy_key = jax.random.split(key)
@@ -110,8 +112,11 @@ def get_ff_evaluator_fn(
 
             # Log episode metrics.
             episode_return += timestep.reward
+            episode_discounted_return += timestep.reward * config.system.gamma ** step_count[0]
             step_count += 1
-            eval_state = EvalState(key, env_state, timestep, step_count, episode_return)
+            eval_state = EvalState(
+                key, env_state, timestep, step_count, episode_return, episode_discounted_return
+            )
             return eval_state
 
         def not_done(carry: Tuple) -> bool:
@@ -124,6 +129,7 @@ def get_ff_evaluator_fn(
 
         eval_metrics = {
             "episode_return": final_state.episode_return,
+            "episode_discounted_return": final_state.episode_discounted_return,
             "episode_length": final_state.step_count,
         }
         # Log solve episode if solve rate is required.
@@ -157,6 +163,7 @@ def get_ff_evaluator_fn(
             timestep=timesteps,
             step_count=jnp.zeros((eval_batch, 1)),
             episode_return=jnp.zeros_like(timesteps.reward),
+            episode_discounted_return=jnp.zeros_like(timesteps.reward),
         )
 
         eval_metrics = jax.vmap(

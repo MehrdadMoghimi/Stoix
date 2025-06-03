@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Callable
 
 import chex
 import jax
@@ -304,6 +304,61 @@ def quantile_q_learning(
 
     # Select target action according to greedy policy w.r.t. dist_q_t_selector.
     q_t_selector = jnp.mean(dist_q_t_selector, axis=1)
+    a_t = jnp.argmax(q_t_selector, axis=-1)
+    dist_qa_t = dist_q_t[batch_indices, :, a_t]
+
+    # Compute target, do not backpropagate into it.
+    dist_target = r_t[:, jnp.newaxis] + d_t[:, jnp.newaxis] * dist_qa_t
+    dist_target = jax.lax.stop_gradient(dist_target)
+
+    return quantile_regression_loss(dist_qa_tm1, tau_q_tm1, dist_target, huber_param).mean()
+
+
+def utility_quantile_q_learning(
+    dist_q_tm1: chex.Array,
+    tau_q_tm1: chex.Array,
+    a_tm1: chex.Array,
+    r_t: chex.Array,
+    d_t: chex.Array,
+    dist_q_t_selector: chex.Array,
+    stock_t_selector: chex.Array,
+    utility_f: Callable,
+    dist_q_t: chex.Array,
+    huber_param: float = 0.0,
+) -> chex.Array:
+    """Implements Q-learning for quantile-valued Q distributions.
+
+    See "Distributional Reinforcement Learning with Quantile Regression" by
+    Dabney et al. (https://arxiv.org/abs/1710.10044).
+
+    Args:
+        dist_q_tm1: Q distribution at time t-1.
+        tau_q_tm1: Q distribution probability thresholds.
+        a_tm1: action index at time t-1.
+        r_t: reward at time t.
+        d_t: discount at time t.
+        dist_q_t_selector: Q distribution at time t for selecting greedy action in
+        target policy. This is separate from dist_q_t as in Double Q-Learning, but
+        can be computed with the target network and a separate set of samples.
+        dist_q_t: target Q distribution at time t.
+        huber_param: Huber loss parameter, defaults to 0 (no Huber loss).
+        stop_target_gradients: bool indicating whether or not to apply stop gradient
+        to targets.
+
+    Returns:
+        Quantile regression Q learning loss.
+    """
+    batch_indices = jnp.arange(a_tm1.shape[0])
+
+    # Only update the taken actions.
+    dist_qa_tm1 = dist_q_tm1[batch_indices, :, a_tm1]
+
+    # Select target action according to greedy policy w.r.t. dist_q_t_selector.
+    # q_t_selector = jnp.mean(dist_q_t_selector, axis=1)
+    utility_values_t_selector = utility_f(
+        stock_t_selector[..., None, None] + dist_q_t_selector
+    )  # (B, NQ, A)
+    q_t_selector = jnp.mean(utility_values_t_selector, axis=1)  # (B, A)
     a_t = jnp.argmax(q_t_selector, axis=-1)
     dist_qa_t = dist_q_t[batch_indices, :, a_t]
 

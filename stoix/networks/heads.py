@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union, Callable
 
 import chex
 import distrax
@@ -281,6 +281,28 @@ class QuantileDiscreteQNetwork(nn.Module):
         )
         q_dist = jnp.reshape(q_logits, (-1, self.action_dim, self.num_quantiles))
         q_values = jnp.mean(q_dist, axis=-1)
+        q_values = jax.lax.stop_gradient(q_values)
+        return distrax.EpsilonGreedy(preferences=q_values, epsilon=self.epsilon), q_dist
+
+
+class UtilityQuantileDiscreteQNetwork(nn.Module):
+    action_dim: int
+    epsilon: float
+    num_quantiles: int
+    utility_fn: Callable
+    kernel_init: Initializer = lecun_normal()
+
+    @nn.compact
+    def __call__(
+        self, embedding: chex.Array, stock: chex.Array
+    ) -> Tuple[distrax.EpsilonGreedy, chex.Array]:
+        q_logits = nn.Dense(self.action_dim * self.num_quantiles, kernel_init=self.kernel_init)(
+            embedding
+        )
+        q_dist = jnp.reshape(q_logits, (-1, self.action_dim, self.num_quantiles))
+        reshaped_stock = jnp.expand_dims(stock, axis=(-2, -1))
+        utility_q_dist = self.utility_fn(reshaped_stock + q_dist)
+        q_values = jnp.mean(utility_q_dist, axis=-1)
         q_values = jax.lax.stop_gradient(q_values)
         return distrax.EpsilonGreedy(preferences=q_values, epsilon=self.epsilon), q_dist
 

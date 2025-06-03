@@ -39,6 +39,20 @@ class Observation(NamedTuple):
     step_count: Optional[chex.Array] = None  # (,)
 
 
+class StockObservation(NamedTuple):
+    """The observation that the agent sees.
+    agent_view: the agent's view of the environment.
+    action_mask: boolean array specifying which action is legal.
+    stock: the current stock of the agent.
+    step_count: the number of steps elapsed since the beginning of the episode.
+    """
+
+    agent_view: chex.Array  # (num_obs_features,)
+    action_mask: chex.Array  # (num_actions,)
+    stock: chex.Numeric  # (,)
+    step_count: Optional[chex.Array] = None  # (,)
+
+
 class ObservationGlobalState(NamedTuple):
     """The observation seen by agents in centralised systems.
     Extends `Observation` by adding a `global_state` attribute for centralised training.
@@ -49,6 +63,13 @@ class ObservationGlobalState(NamedTuple):
     action_mask: chex.Array
     global_state: chex.Array
     step_count: chex.Array
+
+
+@dataclass
+class StockEnvState:
+    key: chex.PRNGKey
+    env_state: State
+    stock: chex.Array
 
 
 @dataclass
@@ -71,6 +92,7 @@ class EvalState(NamedTuple):
     timestep: TimeStep
     step_count: chex.Array
     episode_return: chex.Array
+    episode_discounted_return: chex.Array = None
 
 
 class RNNEvalState(NamedTuple):

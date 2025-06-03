@@ -39,6 +39,8 @@ from stoix.wrappers.transforms import (
     AddStartFlagAndPrevAction,
     MultiBoundedToBounded,
     MultiDiscreteToDiscrete,
+    AddStock,
+    FlattenObservationWrapper,
 )
 from stoix.wrappers.xminigrid import XMiniGridWrapper
 
@@ -125,6 +127,46 @@ def make_gymnax_env(env_name: str, config: DictConfig) -> Tuple[Environment, Env
     # Wrap environments
     env = GymnaxWrapper(env, env_params)
     eval_env = GymnaxWrapper(eval_env, eval_env_params)
+
+    env = AutoResetWrapper(env, next_obs_in_extras=True)
+    env = RecordEpisodeMetrics(env)
+
+    return env, eval_env
+
+
+def make_gymnax_s_env(env_name: str, config: DictConfig) -> Tuple[Environment, Environment]:
+    """
+    Create a Gymnax environments for training and evaluation.
+
+    Args:
+        env_name (str): The name of the environment to create.
+        config (Dict): The configuration of the environment.
+
+    Returns:
+        A tuple of the environments.
+    """
+    # Config generator and select the wrapper.
+    # Create envs.
+    env, env_params = gymnax.make(env_name, **config.env.kwargs)
+    eval_env, eval_env_params = gymnax.make(env_name, **config.env.kwargs)
+
+    env = GymnaxWrapper(env, env_params)
+    eval_env = GymnaxWrapper(eval_env, eval_env_params)
+
+    env = AddStock(
+        env,
+        gamma=config.system.gamma,
+        initial_stock_min=config.env.skwargs.initial_stock_min,
+        initial_stock_max=config.env.skwargs.initial_stock_max,
+    )
+    eval_env = AddStock(
+        eval_env,
+        gamma=config.system.gamma,
+        initial_stock=config.env.skwargs.initial_stock,
+    )
+
+    env = FlattenObservationWrapper(env)
+    eval_env = FlattenObservationWrapper(eval_env)
 
     env = AutoResetWrapper(env, next_obs_in_extras=True)
     env = RecordEpisodeMetrics(env)

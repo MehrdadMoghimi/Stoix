@@ -3,8 +3,7 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
-from stoix.base_types import Observation
-
+from stoix.base_types import Observation, StockObservation
 
 class EmbeddingInput(nn.Module):
     """JAX Array Input."""
@@ -21,6 +20,17 @@ class ObservationInput(nn.Module):
     def __call__(self, observation: Observation) -> chex.Array:
         observation = observation.agent_view
         return observation
+
+
+class StockObservationInput(nn.Module):
+    """Only Observation Input."""
+
+    @nn.compact
+    def __call__(self, observation: StockObservation) -> chex.Array:
+        agent_view = observation.agent_view
+        stock = observation.stock[..., None]
+        x = jnp.concatenate([agent_view, stock], axis=-1)
+        return x
 
 
 class ObservationActionInput(nn.Module):
