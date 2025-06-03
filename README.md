@@ -20,6 +20,50 @@
 <a href="https://zenodo.org/doi/10.5281/zenodo.10916257"><img src="https://zenodo.org/badge/758685996.svg" alt="DOI"></a>
 </div>
 
+<!-- !!! START OF YOUR NEW SECTION !!! -->
+
+## ✨ Now with Stock Augmentation for Advanced Return Distribution Optimization! ✨
+
+This version of Stoix extends the original framework by incorporating **Stock Augmentation** based on the work:
+
+*   **Optimizing Return Distributions with Distributional Dynamic Programming**
+    *   Bernardo Ávila Pires, Mark Rowland, Diana Borsa, Zhaohan Daniel Guo, Khimya Khetarpal, André Barreto, David Abel, Rémi Munos, Will Dabney (DeepMind, 2025)
+    *   [arXiv:2501.13028](https://arxiv.org/abs/2501.13028)
+
+This enhancement allows agents to optimize for various statistical functionals of the return distribution, moving beyond standard expected return maximization. This enables objectives like:
+
+*   Generating specific desired returns.
+*   Optimizing for risk-sensitive measures (e.g., Conditional Value-at-Risk).
+*   Constraint Satisfaction
+
+
+#### Example: Generating Desired Returns in StockGridWorld (Section 7.1)
+
+This example demonstrates how the agent can be conditioned to achieve different return levels by setting the initial stock.
+
+1.  **Configure the Initial Stock (Desired Return):**
+    Open the environment configuration file:
+    `stoix/configs/env/gymnax/stockgridworld.yaml`
+
+    Modify the `initial_stock` parameter. For the "Generating Desired Returns" example where the objective is effectively to make `initial_stock + G` close to zero (e.g. by `f(x) = -|x|`), setting `initial_stock: -5.0` would mean the agent tries to achieve a discounted return `G` of approximately `5.0`.
+
+2.  **Run the training:**
+    ```bash
+    python stoix/systems/q_learning/ff_qr_dqn_s.py env=gymnax/stockgridworld
+    ```
+    This will train the stock-augmented QR-DQN agent (QR-DQN-S) on the `StockGridWorld` environment.
+
+## How Stock Augmentation Works (Briefly)
+
+Following Pires et al. (2025), the agent's state `s` is augmented with a stock `c_t`. The stock is updated at each step, as `c_{t+1} = (c_t + r_{t+1}) / discount_factor`. The agent then learns a policy that optimizes an objective functional over the distribution of `c_0 + G` (initial stock plus discounted return).
+
+For the "Generating Desired Returns" example with `f(x) = -|x|`, the agent learns to make `c_0 + G` as close to zero as possible. Thus, `G` aims to be `-c_0`.
+
+The original Stoix documentation and features follow below.
+
+---
+<!-- !!! END OF YOUR NEW SECTION !!! -->
+
 <h2 align="center">
     <p>Distributed Single-Agent Reinforcement Learning End-to-End in JAX</p>
 </h2>
